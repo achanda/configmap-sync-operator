@@ -100,19 +100,28 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, err
 	}
 
-	// Check if it's time to sync based on the last sync time and polling interval
-	shouldsync := true
+	// Check if we should sync based on the polling interval
+	shouldSync := true
 	if instance.Status.LastSyncTime != nil {
-		nextSyncTime := instance.Status.LastSyncTime.Add(pollingInterval)
-		if time.Now().Before(nextSyncTime) {
-			// Not time to sync yet, requeue at the next sync time
-			shouldsync = false
-			delay := time.Until(nextSyncTime)
-			return ctrl.Result{RequeueAfter: delay}, nil
+		// Parse the polling interval
+		pollingInterval, err := time.ParseDuration(instance.Spec.Source.PollingInterval)
+		if err != nil {
+			log.Error(err, "Failed to parse polling interval, using default of 5 minutes")
+			pollingInterval = 5 * time.Minute
+		}
+
+		// Check if enough time has passed since the last sync
+		lastSync := instance.Status.LastSyncTime.Time
+		nextSync := lastSync.Add(pollingInterval)
+		if time.Now().Before(nextSync) {
+			shouldSync = false
+			log.Info("Skipping sync due to polling interval", "lastSync", lastSync, "nextSync", nextSync)
+			return ctrl.Result{RequeueAfter: time.Until(nextSync)}, nil
 		}
 	}
 
-	if shouldsync {
+	// If we should sync, fetch the API data
+	if shouldSync {
 		// Perform the synchronization
 		if err := r.syncConfigMap(ctx, instance); err != nil {
 			log.Error(err, "Failed to synchronize ConfigMap")
@@ -275,7 +284,11 @@ func (r *ConfigMapSynchronizerReconciler) fetchAPIData(ctx context.Context, inst
 	if err != nil {
 		return nil, fmt.Errorf("failed to send HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			log.Error(cerr, "Failed to close response body")
+		}
+	}()
 
 	// Check the response status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -407,35 +420,6 @@ func (r *ConfigMapSynchronizerReconciler) resolveSecretRef(ctx context.Context, 
 	}
 
 	return string(valueBytes), nil
-}
-
-// findTopLevelTemplateVariables extracts only top-level variable names from a template string
-// It ignores variables used inside control structures like range loops
-func findTopLevelTemplateVariables(templateContent string) []string {
-	// Find all control structure blocks first (range, if, with, etc.)
-	controlBlockRegex := regexp.MustCompile(`{{\s*(range|if|with)\s+.*?}}.*?{{\s*end\s*}}`)
-	// Replace control blocks with empty strings to remove nested variables
-	cleanedTemplate := controlBlockRegex.ReplaceAllString(templateContent, "")
-
-	// Now find all remaining top-level variables
-	varRegex := regexp.MustCompile(`{{\s*\.([a-zA-Z0-9_]+)\s*}}`)
-	matches := varRegex.FindAllStringSubmatch(cleanedTemplate, -1)
-
-	// Deduplicate variable names
-	varMap := make(map[string]struct{})
-	for _, match := range matches {
-		if len(match) >= 2 {
-			varMap[match[1]] = struct{}{}
-		}
-	}
-
-	// Convert to slice
-	result := make([]string, 0, len(varMap))
-	for varName := range varMap {
-		result = append(result, varName)
-	}
-
-	return result
 }
 
 // isConfigMapDataChanged checks if the ConfigMap data would change based on the update strategy

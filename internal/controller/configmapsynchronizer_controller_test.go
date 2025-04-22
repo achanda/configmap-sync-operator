@@ -39,7 +39,10 @@ import (
 func setupMockAPIServer(backendData map[string]interface{}) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(backendData)
+		if err := json.NewEncoder(w).Encode(backendData); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 }
 
