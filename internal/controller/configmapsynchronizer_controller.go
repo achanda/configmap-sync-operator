@@ -114,7 +114,6 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 		lastSync := instance.Status.LastSyncTime.Time
 		nextSync := lastSync.Add(pollingInterval)
 		if time.Now().Before(nextSync) {
-			shouldSync = false
 			log.Info("Skipping sync due to polling interval", "lastSync", lastSync, "nextSync", nextSync)
 			return ctrl.Result{RequeueAfter: time.Until(nextSync)}, nil
 		}
