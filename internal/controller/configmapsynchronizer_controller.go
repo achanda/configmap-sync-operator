@@ -40,8 +40,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	apiconfigv1 "github.com/achanda/configmap-sync-operator/api/v1"
 	"github.com/PaesslerAG/jsonpath"
+	apiconfigv1 "github.com/achanda/configmap-sync-operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -88,7 +88,7 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 	pollingInterval, err := time.ParseDuration(instance.Spec.Source.PollingInterval)
 	if err != nil {
 		log.Error(err, "Invalid polling interval format", "pollingInterval", instance.Spec.Source.PollingInterval)
-		
+
 		// Update status to reflect the error
 		instance.Status.LastSyncState = "Error"
 		instance.Status.Message = fmt.Sprintf("Invalid polling interval format: %s", err)
@@ -96,7 +96,7 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 		if err != nil {
 			log.Error(err, "Failed to update ConfigMapSynchronizer status")
 		}
-		
+
 		return ctrl.Result{}, err
 	}
 
@@ -116,7 +116,7 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 		// Perform the synchronization
 		if err := r.syncConfigMap(ctx, instance); err != nil {
 			log.Error(err, "Failed to synchronize ConfigMap")
-			
+
 			// Update status to reflect the error
 			instance.Status.LastSyncState = "Error"
 			instance.Status.Message = fmt.Sprintf("Synchronization failed: %s", err)
@@ -124,10 +124,10 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 			if err != nil {
 				log.Error(err, "Failed to update ConfigMapSynchronizer status")
 			}
-			
+
 			return ctrl.Result{RequeueAfter: pollingInterval}, nil
 		}
-		
+
 		// Update status to reflect successful synchronization
 		now := metav1.Now()
 		instance.Status.LastSyncTime = &now
@@ -172,7 +172,7 @@ func (r *ConfigMapSynchronizerReconciler) syncConfigMap(ctx context.Context, ins
 
 	configMap := &corev1.ConfigMap{}
 	err = r.Get(ctx, types.NamespacedName{Namespace: targetNamespace, Name: targetName}, configMap)
-	
+
 	isNewConfigMap := false
 	configMapChanged := false
 	if err != nil {
@@ -330,11 +330,11 @@ func (r *ConfigMapSynchronizerReconciler) processTemplates(ctx context.Context, 
 		// Extract the value using JSONPath
 		value, err := jsonpath.Get(mapping.JSONPath, apiData)
 		if err != nil {
-			log.Info("Failed to extract value using JSONPath, using default value", 
-				"jsonPath", mapping.JSONPath, 
+			log.Info("Failed to extract value using JSONPath, using default value",
+				"jsonPath", mapping.JSONPath,
 				"error", err,
 				"defaultValue", mapping.DefaultValue)
-			
+
 			// Use default value if provided
 			if mapping.DefaultValue != "" {
 				templateValues[mapping.VariableName] = mapping.DefaultValue
@@ -413,14 +413,14 @@ func (r *ConfigMapSynchronizerReconciler) resolveSecretRef(ctx context.Context, 
 // It ignores variables used inside control structures like range loops
 func findTopLevelTemplateVariables(templateContent string) []string {
 	// Find all control structure blocks first (range, if, with, etc.)
-	controlBlockRegex := regexp.MustCompile(`{{\s*(range|if|with)\s+.*?}}.*?{{\s*end\s*}}`) 
+	controlBlockRegex := regexp.MustCompile(`{{\s*(range|if|with)\s+.*?}}.*?{{\s*end\s*}}`)
 	// Replace control blocks with empty strings to remove nested variables
 	cleanedTemplate := controlBlockRegex.ReplaceAllString(templateContent, "")
-	
+
 	// Now find all remaining top-level variables
 	varRegex := regexp.MustCompile(`{{\s*\.([a-zA-Z0-9_]+)\s*}}`)
 	matches := varRegex.FindAllStringSubmatch(cleanedTemplate, -1)
-	
+
 	// Deduplicate variable names
 	varMap := make(map[string]struct{})
 	for _, match := range matches {
@@ -428,13 +428,13 @@ func findTopLevelTemplateVariables(templateContent string) []string {
 			varMap[match[1]] = struct{}{}
 		}
 	}
-	
+
 	// Convert to slice
 	result := make([]string, 0, len(varMap))
 	for varName := range varMap {
 		result = append(result, varName)
 	}
-	
+
 	return result
 }
 
@@ -475,10 +475,10 @@ func (r *ConfigMapSynchronizerReconciler) calculateConfigMapSHA256(configMap *co
 	for k := range configMap.Data {
 		keys = append(keys, k)
 	}
-	
+
 	// Sort keys for deterministic order
 	sort.Strings(keys)
-	
+
 	// Create a string with key-value pairs
 	var dataStr strings.Builder
 	for _, k := range keys {
@@ -487,7 +487,7 @@ func (r *ConfigMapSynchronizerReconciler) calculateConfigMapSHA256(configMap *co
 		dataStr.WriteString(configMap.Data[k])
 		dataStr.WriteString(";")
 	}
-	
+
 	// Calculate SHA256 hash
 	hash := sha256.Sum256([]byte(dataStr.String()))
 	return fmt.Sprintf("%x", hash[:8]) // Use first 8 bytes for shorter hash
@@ -496,7 +496,7 @@ func (r *ConfigMapSynchronizerReconciler) calculateConfigMapSHA256(configMap *co
 // restartDeployments performs rolling restarts of the specified deployments by updating annotations
 func (r *ConfigMapSynchronizerReconciler) restartDeployments(ctx context.Context, instance *apiconfigv1.ConfigMapSynchronizer) error {
 	log := logf.FromContext(ctx)
-	
+
 	// Get the target ConfigMap
 	configMap := &corev1.ConfigMap{}
 	err := r.Get(ctx, types.NamespacedName{
@@ -506,16 +506,16 @@ func (r *ConfigMapSynchronizerReconciler) restartDeployments(ctx context.Context
 	if err != nil {
 		return fmt.Errorf("failed to get ConfigMap for deployment restart: %w", err)
 	}
-	
+
 	// Calculate the SHA256 hash of the ConfigMap data
 	configMapSHA := r.calculateConfigMapSHA256(configMap)
 	log.Info("Calculated ConfigMap SHA", "sha", configMapSHA)
-	
+
 	// Process each deployment specified in the RestartDeployments list
 	for _, deploymentRef := range instance.Spec.Target.RestartDeployments {
 		// Parse the deployment reference (namespace/name or just name)
 		namespace, name := parseDeploymentRef(deploymentRef, instance.Spec.Target.Namespace)
-		
+
 		// Get the deployment
 		deployment := &appsv1.Deployment{}
 		err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, deployment)
@@ -523,33 +523,33 @@ func (r *ConfigMapSynchronizerReconciler) restartDeployments(ctx context.Context
 			log.Error(err, "Failed to get deployment", "namespace", namespace, "name", name)
 			continue
 		}
-		
+
 		// Check if the deployment already has the current ConfigMap SHA
 		currentSHA, exists := deployment.Spec.Template.Annotations["configmap-sync.example.com/configmap-sha"]
 		if exists && currentSHA == configMapSHA {
-			log.Info("Deployment already has current ConfigMap SHA, skipping restart", 
+			log.Info("Deployment already has current ConfigMap SHA, skipping restart",
 				"deployment", fmt.Sprintf("%s/%s", namespace, name))
 			continue
 		}
-		
+
 		// Update the deployment's pod template annotations with the ConfigMap SHA
 		if deployment.Spec.Template.Annotations == nil {
 			deployment.Spec.Template.Annotations = make(map[string]string)
 		}
 		deployment.Spec.Template.Annotations["configmap-sync.example.com/configmap-sha"] = configMapSHA
-		
+
 		// Update the deployment
 		if err := r.Update(ctx, deployment); err != nil {
-			log.Error(err, "Failed to update deployment with ConfigMap SHA", 
+			log.Error(err, "Failed to update deployment with ConfigMap SHA",
 				"deployment", fmt.Sprintf("%s/%s", namespace, name))
 			continue
 		}
-		
-		log.Info("Updated deployment with new ConfigMap SHA, triggering rolling restart", 
-			"deployment", fmt.Sprintf("%s/%s", namespace, name), 
+
+		log.Info("Updated deployment with new ConfigMap SHA, triggering rolling restart",
+			"deployment", fmt.Sprintf("%s/%s", namespace, name),
 			"sha", configMapSHA)
 	}
-	
+
 	return nil
 }
 

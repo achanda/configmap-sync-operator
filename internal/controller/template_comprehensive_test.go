@@ -123,8 +123,8 @@ server {
 			},
 			apiData: map[string]interface{}{
 				"server": map[string]interface{}{
-					"name":       "example.com",
-					"env":        "production",
+					"name":        "example.com",
+					"env":         "production",
 					"backend_url": "http://backend:8080",
 				},
 			},

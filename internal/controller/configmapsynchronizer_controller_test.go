@@ -215,7 +215,7 @@ backend http_back
 		AfterEach(func() {
 			// Cleanup resources
 			By("Cleaning up resources")
-			
+
 			// Delete the ConfigMapSynchronizer
 			configMapSynchronizer := &apiconfigv1.ConfigMapSynchronizer{}
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, configMapSynchronizer)

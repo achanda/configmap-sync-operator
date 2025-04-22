@@ -185,7 +185,7 @@ backend http_back
 		// Create an instance with a JSONPath that doesn't exist in the data
 		instanceWithMissingPath := instance.DeepCopy()
 		instanceWithMissingPath.Spec.Template.ValueMappings[0].JSONPath = "$.nonexistent"
-		instanceWithMissingPath.Spec.Template.ValueMappings[0].DefaultValue = "No backends found" 
+		instanceWithMissingPath.Spec.Template.ValueMappings[0].DefaultValue = "No backends found"
 
 		result, err := reconciler.processTemplates(ctx, apiData, modifiedTemplate, instanceWithMissingPath)
 		assert.NoError(t, err)
