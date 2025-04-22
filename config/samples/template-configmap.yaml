@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-template
+  namespace: configmap-sync-test
+data:
+  app-config.properties: |
+    # Todo Information from JSONPlaceholder
+    todo.title={{ .AppName }}
+    todo.id={{ .DbName }}
+    todo.userId={{ .DbPort }}
+    
+    # Completion Status
+    {{ if .FeatureA }}
+    todo.completed=true
+    {{ else }}
+    todo.completed=false
+    {{ end }}
+    
+    # Test for missing variable
+    {{ if .MissingFeature }}
+    missing.feature=enabled
+    {{ else }}
+    missing.feature=disabled
+    {{ end }}

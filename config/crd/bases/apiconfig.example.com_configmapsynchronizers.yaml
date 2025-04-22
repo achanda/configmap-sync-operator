@@ -1,0 +1,193 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  name: configmapsynchronizers.apiconfig.example.com
+spec:
+  group: apiconfig.example.com
+  names:
+    kind: ConfigMapSynchronizer
+    listKind: ConfigMapSynchronizerList
+    plural: configmapsynchronizers
+    singular: configmapsynchronizer
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.target.configMapName
+      name: Target ConfigMap
+      type: string
+    - jsonPath: .spec.target.namespace
+      name: Namespace
+      type: string
+    - jsonPath: .status.lastSyncTime
+      name: Last Sync
+      type: string
+    - jsonPath: .status.lastSyncState
+      name: Status
+      type: string
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: ConfigMapSynchronizer is the Schema for the configmapsynchronizers
+          API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ConfigMapSynchronizerSpec defines the desired state of ConfigMapSynchronizer.
+            properties:
+              source:
+                description: Source defines the external API source configuration
+                properties:
+                  apiEndpoint:
+                    description: APIEndpoint is the URL of the external API endpoint
+                    type: string
+                  headers:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Headers contains HTTP headers to include in the API request
+                      Headers can reference secrets using ${SECRET_REF:namespace:name:key} format
+                    type: object
+                  method:
+                    description: Method is the HTTP method to use for the API request
+                    type: string
+                  pollingInterval:
+                    description: |-
+                      PollingInterval is the interval at which to poll the API
+                      Format is a duration string (e.g. "60s", "5m")
+                    type: string
+                  responseFormat:
+                    description: |-
+                      ResponseFormat defines the format of the API response
+                      Currently only "json" is supported
+                    type: string
+                required:
+                - apiEndpoint
+                - method
+                - pollingInterval
+                type: object
+              target:
+                description: Target defines the target ConfigMap configuration
+                properties:
+                  configMapName:
+                    description: ConfigMapName is the name of the target ConfigMap
+                    type: string
+                  namespace:
+                    description: Namespace is the namespace of the target ConfigMap
+                    type: string
+                  restartDeployments:
+                    description: |-
+                      RestartDeployments defines which deployments should be restarted when the ConfigMap changes
+                      If empty, no deployments will be restarted
+                      Each string should be in the format "namespace/name"
+                      If namespace is omitted, the target ConfigMap's namespace will be used
+                    items:
+                      type: string
+                    type: array
+                  updateStrategy:
+                    description: |-
+                      UpdateStrategy defines how to update the ConfigMap
+                      Valid values are "patch" or "replace"
+                    type: string
+                required:
+                - configMapName
+                - namespace
+                - updateStrategy
+                type: object
+              template:
+                description: Template defines the Go template configuration for generating
+                  the ConfigMap
+                properties:
+                  templateConfigMapRef:
+                    description: |-
+                      TemplateConfigMapRef is a reference to a ConfigMap containing Go templates
+                      The ConfigMap should contain one or more keys with Go template content
+                    properties:
+                      name:
+                        description: Name is the name of the ConfigMap containing
+                          the templates
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace is the namespace of the ConfigMap
+                          If empty, the namespace of the ConfigMapSynchronizer is used
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  valueMappings:
+                    description: |-
+                      ValueMappings defines how to map API response fields to template variables
+                      Each mapping specifies a JSONPath expression to extract data from the API response
+                      and the variable name to use in the Go template
+                    items:
+                      description: ValueMapping defines how to map an API response
+                        field to a template variable
+                      properties:
+                        defaultValue:
+                          description: DefaultValue is an optional default value to
+                            use if the JSONPath doesn't match
+                          type: string
+                        jsonPath:
+                          description: JSONPath is the JSONPath expression to extract
+                            data from the API response
+                          type: string
+                        variableName:
+                          description: VariableName is the name of the variable to
+                            use in the Go template
+                          type: string
+                      required:
+                      - jsonPath
+                      - variableName
+                      type: object
+                    type: array
+                required:
+                - templateConfigMapRef
+                - valueMappings
+                type: object
+            required:
+            - source
+            - target
+            - template
+            type: object
+          status:
+            description: ConfigMapSynchronizerStatus defines the observed state of
+              ConfigMapSynchronizer.
+            properties:
+              lastSyncState:
+                description: LastSyncState indicates the state of the last synchronization
+                  attempt
+                type: string
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful
+                  synchronization
+                format: date-time
+                type: string
+              message:
+                description: Message provides additional information about the synchronization
+                  state
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

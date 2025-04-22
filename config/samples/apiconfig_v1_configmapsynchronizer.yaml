@@ -1,0 +1,32 @@
+apiVersion: apiconfig.example.com/v1
+kind: ConfigMapSynchronizer
+metadata:
+  labels:
+    app.kubernetes.io/name: configmapsynchronizer
+    app.kubernetes.io/managed-by: kustomize
+  name: template-test
+  namespace: configmap-sync-test
+spec:
+  source:
+    apiEndpoint: "https://jsonplaceholder.typicode.com/todos/1"
+    method: "GET"
+    pollingInterval: "60s"
+    responseFormat: "json"
+  target:
+    configMapName: "app-config"
+    namespace: "configmap-sync-test"
+    updateStrategy: "replace"
+    restartDeployments:
+      - "app-deployment"
+  template:
+    templateConfigMapRef:
+      name: "test-template"
+    valueMappings:
+      - jsonPath: "$.title"
+        variableName: "AppName"
+      - jsonPath: "$.completed"
+        variableName: "FeatureA"
+      - jsonPath: "$.userId"
+        variableName: "DbPort"
+      - jsonPath: "$.id"
+        variableName: "DbName"

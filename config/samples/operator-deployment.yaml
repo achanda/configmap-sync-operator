@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: configmap-sync-operator
+  namespace: configmap-sync-test
+  labels:
+    app: configmap-sync-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: configmap-sync-operator
+  template:
+    metadata:
+      labels:
+        app: configmap-sync-operator
+    spec:
+      serviceAccountName: configmap-sync-operator
+      containers:
+      - name: operator
+        image: configmap-sync-operator:test
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
