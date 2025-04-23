@@ -102,20 +102,26 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 
 	// Check if we should sync based on the polling interval
 	shouldSync := true
-	if instance.Status.LastSyncTime != nil {
-		// Parse the polling interval
-		pollingInterval, err := time.ParseDuration(instance.Spec.Source.PollingInterval)
-		if err != nil {
-			log.Error(err, "Failed to parse polling interval, using default of 5 minutes")
-			pollingInterval = 5 * time.Minute
-		}
+	if instance.Status.LastSyncTime != nil && instance.Status.Message != "" {
+		// Check if the API endpoint has changed by looking at the last message
+		if !strings.Contains(instance.Status.Message, instance.Spec.Source.APIEndpoint) {
+			log.Info("API endpoint has changed, forcing sync", "oldEndpoint", instance.Status.Message, "newEndpoint", instance.Spec.Source.APIEndpoint)
+			shouldSync = true
+		} else {
+			// Parse the polling interval
+			pollingInterval, err := time.ParseDuration(instance.Spec.Source.PollingInterval)
+			if err != nil {
+				log.Error(err, "Failed to parse polling interval, using default of 5 minutes")
+				pollingInterval = 5 * time.Minute
+			}
 
-		// Check if enough time has passed since the last sync
-		lastSync := instance.Status.LastSyncTime.Time
-		nextSync := lastSync.Add(pollingInterval)
-		if time.Now().Before(nextSync) {
-			log.Info("Skipping sync due to polling interval", "lastSync", lastSync, "nextSync", nextSync)
-			return ctrl.Result{RequeueAfter: time.Until(nextSync)}, nil
+			// Check if enough time has passed since the last sync
+			lastSync := instance.Status.LastSyncTime.Time
+			nextSync := lastSync.Add(pollingInterval)
+			if time.Now().Before(nextSync) {
+				log.Info("Skipping sync due to polling interval", "lastSync", lastSync, "nextSync", nextSync)
+				return ctrl.Result{RequeueAfter: time.Until(nextSync)}, nil
+			}
 		}
 	}
 
@@ -140,7 +146,7 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 		now := metav1.Now()
 		instance.Status.LastSyncTime = &now
 		instance.Status.LastSyncState = "Synced"
-		instance.Status.Message = "Successfully synchronized ConfigMap"
+		instance.Status.Message = fmt.Sprintf("Successfully synchronized ConfigMap from %s", instance.Spec.Source.APIEndpoint)
 		err = r.Status().Update(ctx, instance)
 		if err != nil {
 			log.Error(err, "Failed to update ConfigMapSynchronizer status")
@@ -161,6 +167,9 @@ func (r *ConfigMapSynchronizerReconciler) syncConfigMap(ctx context.Context, ins
 	if err != nil {
 		return fmt.Errorf("failed to fetch API data: %w", err)
 	}
+
+	// Log the API data for debugging
+	log.V(1).Info("Fetched API data", "data", fmt.Sprintf("%+v", apiData))
 
 	// Fetch the template ConfigMap
 	templateConfigMap, err := r.fetchTemplateConfigMap(ctx, instance)
