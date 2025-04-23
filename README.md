@@ -18,7 +18,7 @@ The ConfigMap Sync Operator is designed to automate the process of keeping Kuber
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/configmapsynchronizer:tag
+make docker-build docker-push IMG=<some-registry>/configmap-sync-operator:tag
 ```
 
 **NOTE:** This image ought to be published in the personal registry you specified.
@@ -34,7 +34,7 @@ make install
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
 ```sh
-make deploy IMG=<some-registry>/configmapsynchronizer:tag
+make deploy IMG=<some-registry>/configmap-sync-operator:tag
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
@@ -77,7 +77,7 @@ Following the options to release and provide this solution to the users.
 1. Build the installer for the image built and published in the registry:
 
 ```sh
-make build-installer IMG=<some-registry>/configmapsynchronizer:tag
+make build-installer IMG=<some-registry>/configmap-sync-operator:tag
 ```
 
 **NOTE:** The makefile target mentioned above generates an 'install.yaml'
@@ -91,7 +91,7 @@ Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
 the project, i.e.:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/configmapsynchronizer/<tag or branch>/dist/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/<org>/configmap-sync-operator/<tag or branch>/dist/install.yaml
 ```
 
 ### By providing a Helm Chart
