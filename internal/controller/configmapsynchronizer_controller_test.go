@@ -281,12 +281,12 @@ backend http_back
 				if err != nil {
 					return false
 				}
-				_, exists := deployment.Spec.Template.Annotations["configmap-sync.example.com/configmap-sha"]
+				_, exists := deployment.Spec.Template.Annotations["configmap-sync.achanda.dev/configmap-sha"]
 				return exists
 			}).Should(BeTrue())
 
 			// Save the initial SHA
-			initialSHA := deployment.Spec.Template.Annotations["configmap-sync.example.com/configmap-sha"]
+			initialSHA := deployment.Spec.Template.Annotations["configmap-sync.achanda.dev/configmap-sha"]
 
 			// Update the mock server to return updated backend data
 			mockServer.Close()
@@ -322,7 +322,7 @@ backend http_back
 				if err != nil {
 					return false
 				}
-				newSHA := deployment.Spec.Template.Annotations["configmap-sync.example.com/configmap-sha"]
+				newSHA := deployment.Spec.Template.Annotations["configmap-sync.achanda.dev/configmap-sha"]
 				return newSHA != "" && newSHA != initialSHA
 			}).Should(BeTrue())
 		})

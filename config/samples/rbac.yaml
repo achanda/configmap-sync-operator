@@ -16,10 +16,10 @@ rules:
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["get", "list", "watch", "update", "patch"]
-- apiGroups: ["apiconfig.example.com"]
+- apiGroups: ["apiconfig.achanda.dev"]
   resources: ["configmapsynchronizers"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["apiconfig.example.com"]
+- apiGroups: ["apiconfig.achanda.dev"]
   resources: ["configmapsynchronizers/status"]
   verbs: ["get", "update", "patch"]
 ---

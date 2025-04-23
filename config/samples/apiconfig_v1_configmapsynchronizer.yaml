@@ -1,4 +1,4 @@
-apiVersion: apiconfig.example.com/v1
+apiVersion: apiconfig.achanda.dev/v1
 kind: ConfigMapSynchronizer
 metadata:
   labels:

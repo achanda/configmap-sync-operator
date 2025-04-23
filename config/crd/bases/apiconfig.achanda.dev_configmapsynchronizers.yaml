@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: configmapsynchronizers.apiconfig.example.com
+  name: configmapsynchronizers.apiconfig.achanda.dev
 spec:
-  group: apiconfig.example.com
+  group: apiconfig.achanda.dev
   names:
     kind: ConfigMapSynchronizer
     listKind: ConfigMapSynchronizerList

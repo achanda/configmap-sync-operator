@@ -51,9 +51,9 @@ type ConfigMapSynchronizerReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=apiconfig.example.com,resources=configmapsynchronizers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apiconfig.example.com,resources=configmapsynchronizers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=apiconfig.example.com,resources=configmapsynchronizers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=apiconfig.achanda.dev,resources=configmapsynchronizers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apiconfig.achanda.dev,resources=configmapsynchronizers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apiconfig.achanda.dev,resources=configmapsynchronizers/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
@@ -508,7 +508,7 @@ func (r *ConfigMapSynchronizerReconciler) restartDeployments(ctx context.Context
 		}
 
 		// Check if the deployment already has the current ConfigMap SHA
-		currentSHA, exists := deployment.Spec.Template.Annotations["configmap-sync.example.com/configmap-sha"]
+		currentSHA, exists := deployment.Spec.Template.Annotations["configmap-sync.achanda.dev/configmap-sha"]
 		if exists && currentSHA == configMapSHA {
 			log.Info("Deployment already has current ConfigMap SHA, skipping restart",
 				"deployment", fmt.Sprintf("%s/%s", namespace, name))
@@ -519,7 +519,7 @@ func (r *ConfigMapSynchronizerReconciler) restartDeployments(ctx context.Context
 		if deployment.Spec.Template.Annotations == nil {
 			deployment.Spec.Template.Annotations = make(map[string]string)
 		}
-		deployment.Spec.Template.Annotations["configmap-sync.example.com/configmap-sha"] = configMapSHA
+		deployment.Spec.Template.Annotations["configmap-sync.achanda.dev/configmap-sha"] = configMapSHA
 
 		// Update the deployment
 		if err := r.Update(ctx, deployment); err != nil {
