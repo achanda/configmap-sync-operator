@@ -42,7 +42,16 @@ const metricsServiceName = "configmapsynchronizer-controller-manager-metrics-ser
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
 const metricsRoleBindingName = "configmapsynchronizer-metrics-binding"
 
-var _ = Describe("Manager", Ordered, func() {
+// testNamespace is the namespace where we'll create test resources
+const testNamespace = "configmap-sync-test"
+
+// targetConfigMapName is the name of the ConfigMap that will be created by the operator
+const targetConfigMapName = "app-config"
+
+// configSyncName is the name of the ConfigMapSynchronizer resource
+const configSyncName = "template-test"
+
+var _ = Describe("ConfigMapSynchronizer", Ordered, func() {
 	var controllerPodName string
 
 	// Before running the tests, set up the environment by creating the namespace,
@@ -251,22 +260,90 @@ var _ = Describe("Manager", Ordered, func() {
 
 			By("getting the metrics by checking curl-metrics logs")
 			metricsOutput := getMetricsOutput()
-			Expect(metricsOutput).To(ContainSubstring(
-				"controller_runtime_reconcile_total",
-			))
+			Expect(metricsOutput).To(ContainSubstring("workqueue_depth"))
+			Expect(metricsOutput).To(ContainSubstring("workqueue_adds_total"))
 		})
 
-		// +kubebuilder:scaffold:e2e-webhooks-checks
+		It("should create and update a ConfigMap based on external API data", func() {
+			By("creating the test namespace")
+			cmd := exec.Command("kubectl", "create", "ns", testNamespace)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create test namespace")
 
-		// TODO: Customize the e2e test suite with scenarios specific to your project.
-		// Consider applying sample/CR(s) and check their status and/or verifying
-		// the reconciliation by using the metrics, i.e.:
-		// metricsOutput := getMetricsOutput()
-		// Expect(metricsOutput).To(ContainSubstring(
-		//    fmt.Sprintf(`controller_runtime_reconcile_total{controller="%s",result="success"} 1`,
-		//    strings.ToLower(<Kind>),
-		// ))
+			By("creating the template ConfigMap")
+			templateConfigMapPath := filepath.Join("config", "samples", "template-configmap.yaml")
+			// Apply the template ConfigMap
+			cmd = exec.Command("kubectl", "apply", "-f", templateConfigMapPath)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create template ConfigMap")
+
+			By("creating the app deployment")
+			cmd = exec.Command("kubectl", "create", "deployment", "app-deployment",
+				"--image=nginx:latest", "-n", testNamespace)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create app deployment")
+
+			By("creating the ConfigMapSynchronizer resource")
+			configSyncPath := filepath.Join("config", "samples", "apiconfig_v1_configmapsynchronizer.yaml")
+			// Create a new ConfigMapSynchronizer with the name from our constant
+			cmd = exec.Command("kubectl", "create", "-f", configSyncPath, "-n", testNamespace)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create ConfigMapSynchronizer resource")
+
+			// Update the resource to use our constant name
+			// Create the patch JSON
+			patchJSON := fmt.Sprintf("{\"metadata\":{\"name\":\"%s\"}}", configSyncName)
+			cmd = exec.Command("kubectl", "patch", "configmapsynchronizer", configSyncName,
+				"-n", testNamespace, "-p", patchJSON, "--type=merge")
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create ConfigMapSynchronizer resource")
+
+			By("waiting for the ConfigMap to be created")
+			verifyConfigMapCreated := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "configmap", targetConfigMapName,
+					"-n", testNamespace)
+				_, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred(), "ConfigMap should exist")
+			}
+			Eventually(verifyConfigMapCreated, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("verifying the ConfigMap contents")
+			verifyConfigMapContents := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "configmap", targetConfigMapName,
+					"-o", "jsonpath={.data['app-config\\.properties']}", "-n", testNamespace)
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to get ConfigMap data")
+
+				// Check that the ConfigMap contains the expected values from the JSONPlaceholder API
+				g.Expect(output).To(ContainSubstring("todo.title="))
+				g.Expect(output).To(ContainSubstring("todo.id="))
+				g.Expect(output).To(ContainSubstring("todo.userId="))
+				g.Expect(output).To(Or(
+					ContainSubstring("todo.completed=true"),
+					ContainSubstring("todo.completed=false"),
+				))
+				g.Expect(output).To(ContainSubstring("missing.feature=disabled"))
+			}
+			Eventually(verifyConfigMapContents, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("verifying the deployment was updated with the ConfigMap SHA annotation")
+			verifyDeploymentAnnotation := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "deployment", "app-deployment",
+					"-o", "jsonpath={.spec.template.metadata.annotations['configmap-sync\\.achanda\\.dev/configmap-sha']}",
+					"-n", testNamespace)
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to get deployment annotation")
+				g.Expect(output).NotTo(BeEmpty(), "Deployment should have ConfigMap SHA annotation")
+			}
+			Eventually(verifyDeploymentAnnotation, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("cleaning up test resources")
+			cmd = exec.Command("kubectl", "delete", "ns", testNamespace, "--wait=false")
+			_, _ = utils.Run(cmd)
+		})
 	})
+
+	// +kubebuilder:scaffold:e2e-webhooks-checks
 })
 
 // serviceAccountToken returns a token for the specified service account in the given namespace.
@@ -279,14 +356,15 @@ func serviceAccountToken() (string, error) {
 	}`
 
 	// Temporary file to store the token request
-	secretName := fmt.Sprintf("%s-token-request", serviceAccountName)
-	tokenRequestFile := filepath.Join("/tmp", secretName)
+	tokenName := fmt.Sprintf("%s-token-request", serviceAccountName)
+	tokenRequestFile := filepath.Join("/tmp", tokenName)
 	err := os.WriteFile(tokenRequestFile, []byte(tokenRequestRawString), os.FileMode(0o644))
 	if err != nil {
 		return "", err
 	}
 
 	var out string
+	var tokenErr error
 	verifyTokenCreation := func(g Gomega) {
 		// Execute kubectl command to create the token
 		cmd := exec.Command("kubectl", "create", "--raw", fmt.Sprintf(
@@ -300,14 +378,14 @@ func serviceAccountToken() (string, error) {
 
 		// Parse the JSON output to extract the token
 		var token tokenRequest
-		err = json.Unmarshal(output, &token)
-		g.Expect(err).NotTo(HaveOccurred())
+		tokenErr = json.Unmarshal(output, &token)
+		g.Expect(tokenErr).NotTo(HaveOccurred())
 
 		out = token.Status.Token
 	}
 	Eventually(verifyTokenCreation).Should(Succeed())
 
-	return out, err
+	return out, tokenErr
 }
 
 // getMetricsOutput retrieves and returns the logs from the curl pod used to access the metrics endpoint.
