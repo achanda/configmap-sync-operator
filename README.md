@@ -1,8 +1,10 @@
-# configmapsynchronizer
-// TODO(user): Add simple overview of use/purpose
+# ConfigMap Sync Operator
+
+A Kubernetes operator that synchronizes ConfigMaps with external API sources using customizable templates.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+
+The ConfigMap Sync Operator is designed to automate the process of keeping Kubernetes ConfigMaps in sync with external data sources. It periodically polls external APIs, transforms the data using Go templates, and updates target ConfigMaps accordingly. This is particularly useful for scenarios where configuration data is maintained outside the Kubernetes cluster but needs to be available to applications running within the cluster.
 
 ## Getting Started
 
@@ -111,7 +113,16 @@ previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml
 is manually re-applied afterwards.
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+
+Contributions are welcome! Here's how you can contribute to this project:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please make sure to update tests as appropriate and adhere to the existing coding style.
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
 
@@ -119,7 +130,7 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 ## License
 
-Copyright 2025.
+Copyright 2023-2025.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
