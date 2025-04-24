@@ -1,0 +1,150 @@
+name: OLM Validation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'bundle/**'
+      - 'config/crd/**'
+      - 'api/**'
+      - '.github/workflows/olm-validation.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'bundle/**'
+      - 'config/crd/**'
+      - 'api/**'
+      - '.github/workflows/olm-validation.yml'
+
+jobs:
+  validate-bundle:
+    name: Validate OLM Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install operator-sdk
+        run: |
+          export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
+          export OS=$(uname | awk '{print tolower($0)}')
+          export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/v1.31.0
+          curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
+          chmod +x operator-sdk_${OS}_${ARCH}
+          sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
+
+      - name: Install OPM
+        run: |
+          export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
+          export OS=$(uname | awk '{print tolower($0)}')
+          export OPM_DL_URL=https://github.com/operator-framework/operator-registry/releases/download/v1.31.0
+          curl -LO ${OPM_DL_URL}/linux-${ARCH}-opm
+          chmod +x linux-${ARCH}-opm
+          sudo mv linux-${ARCH}-opm /usr/local/bin/opm
+
+      - name: Generate bundle manifests
+        run: |
+          make bundle
+
+      - name: Validate bundle
+        run: |
+          # Use the correct plugin version
+          operator-sdk bundle validate ./bundle --select-optional name=operatorhub --plugins=go.kubebuilder.io/v3
+
+      - name: Validate CSV
+        run: |
+          if ! grep -q "containerImage" bundle/manifests/configmap-sync-operator.clusterserviceversion.yaml; then
+            echo "CSV is missing containerImage annotation"
+            exit 1
+          fi
+          
+          if ! grep -q "capabilities" bundle/manifests/configmap-sync-operator.clusterserviceversion.yaml; then
+            echo "CSV is missing capabilities annotation"
+            exit 1
+          fi
+          
+          if ! grep -q "categories" bundle/manifests/configmap-sync-operator.clusterserviceversion.yaml; then
+            echo "CSV is missing categories annotation"
+            exit 1
+          fi
+          
+          echo "CSV validation passed"
+
+      - name: Validate CRD
+        run: |
+          if ! grep -q "openAPIV3Schema" bundle/manifests/apiconfig.achanda.dev_configmapsynchronizers.yaml; then
+            echo "CRD is missing schema validation"
+            exit 1
+          fi
+          
+          if ! grep -q "description" bundle/manifests/apiconfig.achanda.dev_configmapsynchronizers.yaml; then
+            echo "CRD is missing field descriptions"
+            exit 1
+          fi
+          
+          # Check for required properties validation
+          if ! grep -q "required:" bundle/manifests/apiconfig.achanda.dev_configmapsynchronizers.yaml; then
+            echo "CRD is missing required properties validation"
+            exit 1
+          fi
+          
+          # Check for property types
+          if ! grep -q "type: object" bundle/manifests/apiconfig.achanda.dev_configmapsynchronizers.yaml; then
+            echo "CRD is missing property type definitions"
+            exit 1
+          fi
+          
+          echo "CRD validation passed"
+
+  scorecard-tests:
+    name: Run Scorecard Tests
+    runs-on: ubuntu-latest
+    needs: validate-bundle
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install operator-sdk
+        run: |
+          export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
+          export OS=$(uname | awk '{print tolower($0)}')
+          export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/v1.31.0
+          curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
+          chmod +x operator-sdk_${OS}_${ARCH}
+          sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
+
+      - name: Setup Kubernetes cluster
+        uses: helm/kind-action@v1.8.0
+        with:
+          version: v0.20.0
+          cluster_name: kind
+
+      - name: Generate bundle manifests
+        run: |
+          make bundle
+
+      - name: Run scorecard tests
+        run: |
+          # Run basic tests that don't require a running operator
+          operator-sdk scorecard bundle \
+            --selector=suite=basic \
+            --output=text \
+            --wait-time=60s \
+            --plugins=go.kubebuilder.io/v3
+
+          # Run OLM tests
+          operator-sdk scorecard bundle \
+            --selector=suite=olm \
+            --output=text \
+            --wait-time=60s \
+            --plugins=go.kubebuilder.io/v3
