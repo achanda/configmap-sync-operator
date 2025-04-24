@@ -1,0 +1,344 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "apiconfig.achanda.dev/v1",
+          "kind": "ConfigMapSynchronizer",
+          "metadata": {
+            "name": "example-configmapsynchronizer"
+          },
+          "spec": {
+            "source": {
+              "apiEndpoint": "https://api.example.com/config",
+              "method": "GET",
+              "headers": {
+                "Authorization": "Bearer ${SECRET_REF:default:api-credentials:token}"
+              },
+              "pollingInterval": "5m"
+            },
+            "target": {
+              "configMapName": "api-config",
+              "namespace": "default",
+              "updateStrategy": "replace",
+              "restartDeployments": [
+                "api-service"
+              ]
+            },
+            "template": {
+              "templateConfigMapRef": {
+                "name": "config-template",
+                "namespace": "default"
+              },
+              "valueMappings": [
+                {
+                  "jsonPath": "$.config.endpoints",
+                  "variableName": "endpoints",
+                  "defaultValue": "[]"
+                },
+                {
+                  "jsonPath": "$.config.timeout",
+                  "variableName": "timeout",
+                  "defaultValue": "30"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    capabilities: Basic Install
+    categories: Integration & Delivery
+    containerImage: quay.io/achanda/configmap-sync-operator:latest
+    createdAt: '2025-04-23T23:23:10Z'
+    description: Synchronizes external API data to ConfigMaps with template support
+    operators.operatorframework.io/builder: operator-sdk
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
+    repository: https://github.com/achanda/configmap-sync-operator
+    support: achanda
+  name: configmap-sync-operator.v0.1.0
+  namespace: placeholder
+spec:
+  minKubeVersion: 1.21.0
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: ConfigMapSynchronizer synchronizes external API data to ConfigMaps with template support
+      displayName: ConfigMap Synchronizer
+      kind: ConfigMapSynchronizer
+      name: configmapsynchronizers.apiconfig.achanda.dev
+      version: v1
+      resources:
+      - kind: ConfigMap
+        name: ''
+        version: v1
+      - kind: Secret
+        name: ''
+        version: v1
+      - kind: Deployment
+        name: ''
+        version: v1
+      specDescriptors:
+      - description: Source defines the external API source configuration
+        displayName: API Source
+        path: source
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:fieldGroup:Source'
+      - description: API endpoint URL to fetch data from
+        displayName: API Endpoint
+        path: source.apiEndpoint
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - description: HTTP method to use for the API request
+        displayName: HTTP Method
+        path: source.method
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - description: Polling interval for API requests
+        displayName: Polling Interval
+        path: source.pollingInterval
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - description: Target defines the target ConfigMap configuration
+        displayName: Target ConfigMap
+        path: target
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:fieldGroup:Target'
+      - description: Name of the target ConfigMap
+        displayName: ConfigMap Name
+        path: target.configMapName
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - description: Namespace of the target ConfigMap
+        displayName: Namespace
+        path: target.namespace
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - description: Strategy for updating the ConfigMap (patch or replace)
+        displayName: Update Strategy
+        path: target.updateStrategy
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:select:patch'
+        - 'urn:alm:descriptor:com.tectonic.ui:select:replace'
+      - description: Deployments to restart when ConfigMap changes
+        displayName: Restart Deployments
+        path: target.restartDeployments
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:arrayFieldGroup:RestartDeployments'
+      - description: Template configuration for generating the ConfigMap
+        displayName: Template Configuration
+        path: template
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:fieldGroup:Template'
+      - description: Reference to a ConfigMap containing Go templates
+        displayName: Template ConfigMap Reference
+        path: template.templateConfigMapRef
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:fieldGroup:TemplateConfigMap'
+      - description: JSONPath mappings to extract values from API response
+        displayName: Value Mappings
+        path: template.valueMappings
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:arrayFieldGroup:ValueMappings'
+      statusDescriptors:
+      - description: Timestamp of the last successful synchronization
+        displayName: Last Sync Time
+        path: status.lastSyncTime
+        x-descriptors:
+        - 'urn:alm:descriptor:text'
+      - description: State of the last synchronization attempt
+        displayName: Sync State
+        path: status.lastSyncState
+        x-descriptors:
+        - 'urn:alm:descriptor:text'
+      - description: Additional information about the synchronization state
+        displayName: Message
+        path: status.message
+        x-descriptors:
+        - 'urn:alm:descriptor:text'
+  description: |
+    # ConfigMap Sync Operator
+
+    The ConfigMap Sync Operator synchronizes data from external APIs into Kubernetes ConfigMaps using customizable templates.
+
+    ## Features
+
+    - Fetch data from external HTTP/HTTPS APIs
+    - Support for authentication via headers with secret references
+    - Transform API data using JSONPath expressions
+    - Apply data to ConfigMaps using Go templates
+    - Configurable polling intervals
+    - Automatic deployment restarts when ConfigMaps change
+    - Support for different update strategies (patch or replace)
+
+    ## Use Cases
+
+    - Synchronize external service configurations into Kubernetes
+    - Manage application configurations from centralized APIs
+    - Automate configuration updates with templating
+    - Trigger application reloads when configurations change
+
+    ## Getting Started
+
+    1. Create a template ConfigMap with your desired configuration format
+    2. Create a ConfigMapSynchronizer custom resource specifying:
+       - The external API endpoint to fetch data from
+       - The target ConfigMap to update
+       - JSONPath mappings to extract values from the API response
+       - Deployments to restart when the ConfigMap changes
+
+    See the [documentation](https://github.com/achanda/configmap-sync-operator) for more details.
+  displayName: ConfigMap Sync Operator
+  icon:
+  - base64data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48cGF0aCBkPSJNMjE4LjEgMTY3LjJsLTM1LjQtMTQuNSA5LjQtMjMgMzUuNSAxNC41YzExLjYgNC43IDE3LjEgMTcuOSAxMi40IDI5LjUtNC43IDExLjYtMTcuOSAxNy4xLTI5LjUgMTIuNC0xMS43LTQuOC0xNy4yLTE4LTEyLjQtMjkuNnYuMXptLTg3LjkgNTAuNmwtMzUuNS0xNC41YzExLjYgNC43IDE3LjEgMTcuOSAxMi40IDI5LjUtNC43IDExLjYtMTcuOSAxNy4xLTI5LjUgMTIuNC0xMS42LTQuNy0xNy4xLTE3LjktMTIuNC0yOS41bDkuNC0yMyAzNS41IDE0LjVjMTEuNiA0LjcgMTcuMSAxNy45IDEyLjQgMjkuNS00LjggMTEuNy0xOCAxNy4yLTI5LjYgMTIuNXYtLjFsNDcuOS0xOS42YzExLjYgNC43IDE3LjEgMTcuOSAxMi40IDI5LjUtNC43IDExLjYtMTcuOSAxNy4xLTI5LjUgMTIuNGwtNi41LTIuN3ptLTg3LjktNTAuNmw5LjQtMjMgMzUuNSAxNC41YzExLjYgNC43IDE3LjEgMTcuOSAxMi40IDI5LjUtNC43IDExLjYtMTcuOSAxNy4xLTI5LjUgMTIuNC0xMS43LTQuOC0xNy4yLTE4LTEyLjQtMjkuNnYuMWwtMzUuNS0xNC41YzExLjYgNC43IDE3LjEgMTcuOSAxMi40IDI5LjUtNC43IDExLjYtMTcuOSAxNy4xLTI5LjUgMTIuNC0xMS42LTQuNy0xNy4xLTE3LjktMTIuNC0yOS41bDkuNC0yMyAzNS41IDE0LjVjMTEuNiA0LjcgMTcuMSAxNy45IDEyLjQgMjkuNS00LjggMTEuNy0xOCAxNy4yLTI5LjYgMTIuNXYtLjFsNDcuOS0xOS42em0xNzUuOCAwbDkuNCAyMyAzNS41LTE0LjVjMTEuNi00LjcgMTcuMS0xNy45IDEyLjQtMjkuNS00LjctMTEuNi0xNy45LTE3LjEtMjkuNS0xMi40LTExLjYgNC43LTE3LjEgMTcuOS0xMi40IDI5LjV2LS4xbC0zNS41IDE0LjVjMTEuNi00LjcgMTcuMS0xNy45IDEyLjQtMjkuNS00LjctMTEuNi0xNy45LTE3LjEtMjkuNS0xMi40LTExLjYgNC43LTE3LjEgMTcuOS0xMi40IDI5LjVsOS40IDIzIDM1LjUtMTQuNWMxMS42LTQuNyAxNy4xLTE3LjkgMTIuNC0yOS41LTQuOC0xMS43LTE4LTE3LjItMjkuNi0xMi41di4xbDQ3LjktMTkuNnptLTg3LjkgNTAuNmw5LjQgMjMgMzUuNS0xNC41YzExLjYtNC43IDE3LjEtMTcuOSAxMi40LTI5LjUtNC43LTExLjYtMTcuOS0xNy4xLTI5LjUtMTIuNC0xMS43IDQuOC0xNy4yIDE4LTEyLjQgMjkuNnYtLjFsLTM1LjUgMTQuNWMxMS42LTQuNyAxNy4xLTE3LjkgMTIuNC0yOS41LTQuNy0xMS42LTE3LjktMTcuMS0yOS41LTEyLjQtMTEuNiA0LjctMTcuMSAxNy45LTEyLjQgMjkuNWw5LjQgMjMgMzUuNS0xNC41YzExLjYtNC43IDE3LjEtMTcuOSAxMi40LTI5LjUtNC44LTExLjctMTgtMTcuMi0yOS42LTEyLjV2LjFsNDcuOS0xOS42em0tODcuOS01MC42bDM1LjUgMTQuNS05LjQgMjMtMzUuNS0xNC41Yy0xMS42LTQuNy0xNy4xLTE3LjktMTIuNC0yOS41IDQuNy0xMS42IDE3LjktMTcuMSAyOS41LTEyLjQgMTEuNyA0LjggMTcuMiAxOCAxMi40IDI5LjZ2LS4xem0xNzUuOCAwbC0zNS41LTE0LjUgOS40LTIzIDM1LjUgMTQuNWMxMS42IDQuNyAxNy4xIDE3LjkgMTIuNCAyOS41LTQuNyAxMS42LTE3LjkgMTcuMS0yOS41IDEyLjQtMTEuNy00LjgtMTcuMi0xOC0xMi40LTI5LjZ2LjF6IiBmaWxsPSIjMzI3M0RDIi8+PC9zdmc+
+    mediatype: image/svg+xml
+  install:
+    spec:
+      deployments:
+      - name: configmap-sync-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              control-plane: controller-manager
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                control-plane: controller-manager
+            spec:
+              containers:
+              - args:
+                - --leader-elect
+                - --metrics-bind-address=:8080
+                - --health-probe-bind-address=:8081
+                - --metrics-secure=false
+                image: quay.io/achanda/configmap-sync-operator:latest
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: configmap-sync-operator
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - get
+          - list
+          - watch
+          - update
+          - patch
+        - apiGroups:
+          - apiconfig.achanda.dev
+          resources:
+          - configmapsynchronizers
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apiconfig.achanda.dev
+          resources:
+          - configmapsynchronizers/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - apiconfig.achanda.dev
+          resources:
+          - configmapsynchronizers/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: configmap-sync-operator
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - apiextensions.k8s.io
+          resources:
+          - customresourcedefinitions
+          verbs:
+          - get
+          - list
+          - watch
+        serviceAccountName: configmap-sync-operator
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: false
+    type: AllNamespaces
+  keywords:
+  - configmap
+  - synchronization
+  - api
+  - template
+  - configuration
+  maintainers:
+  - email: user@example.com
+    name: Abhishek Chanda
+  maturity: alpha
+  provider:
+    name: Abhishek Chanda
+  version: 0.1.0
+  replaces: ""

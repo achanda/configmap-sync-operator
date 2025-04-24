@@ -1,6 +1,10 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
+# Bundle and catalog image URLs
+BUNDLE_IMG ?= configmap-sync-operator-bundle:v0.1.0
+CATALOG_IMG ?= configmap-sync-operator-catalog:v0.1.0
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -155,6 +159,36 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+##@ OLM Bundle
+
+.PHONY: bundle
+bundle: manifests kustomize ## Generate OLM bundle manifests
+	# Clean up any existing manifests except the CSV
+	find bundle/manifests -type f -not -name "configmap-sync-operator.clusterserviceversion.yaml" -delete
+	# Copy the CRD to the bundle manifests directory
+	cp config/crd/bases/apiconfig.achanda.dev_configmapsynchronizers.yaml bundle/manifests/
+	@echo "Bundle manifests generated successfully"
+
+.PHONY: bundle-build
+bundle-build: bundle ## Build the bundle image
+	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+.PHONY: bundle-push
+bundle-push: ## Push the bundle image
+	$(CONTAINER_TOOL) push $(BUNDLE_IMG)
+
+.PHONY: catalog-build
+catalog-build: bundle-build ## Build a catalog image containing the bundle
+	opm index add --bundles $(BUNDLE_IMG) --tag $(CATALOG_IMG) --container-tool $(CONTAINER_TOOL)
+
+.PHONY: catalog-push
+catalog-push: ## Push the catalog image
+	$(CONTAINER_TOOL) push $(CATALOG_IMG)
+
+.PHONY: bundle-run
+bundle-run: ## Run the bundle in a local cluster
+	operator-sdk run bundle $(BUNDLE_IMG)
 
 ##@ Dependencies
 
