@@ -4,22 +4,38 @@ metadata:
   name: test-template
   namespace: configmap-sync-test
 data:
+  # Basic configuration template for standard API data
   app-config.properties: |
-    # Todo Information from JSONPlaceholder
-    todo.title={{ .AppName }}
-    todo.id={{ .DbName }}
-    todo.userId={{ .DbPort }}
+    # API Configuration
+    api.server.url={{ .ServerUrl | default "http://localhost:8080" }}
+    api.server.port={{ .Port | default "8080" }}
+    api.environment={{ .Environment | default "development" }}
     
-    # Completion Status
+    # Feature Flags
     {{ if .FeatureA }}
-    todo.completed=true
+    feature.a.enabled=true
     {{ else }}
-    todo.completed=false
+    feature.a.enabled=false
     {{ end }}
     
-    # Test for missing variable
+    # Default values for missing variables
     {{ if .MissingFeature }}
     missing.feature=enabled
     {{ else }}
     missing.feature=disabled
     {{ end }}
+  
+  # Template for secured API endpoints
+  secure-api-config.yaml: |
+    apiConfig:
+      endpoint: {{ .ApiEndpoint | default "https://api.default.com" }}
+      timeout: {{ .Timeout | default "30s" }}
+      retries: 3
+      features:
+        {{- if .EnabledFeatures }}
+        {{- range $index, $feature := .EnabledFeatures }}
+        - enabled: {{ $feature }}
+        {{- end }}
+        {{- else }}
+        - enabled: false
+        {{- end }}

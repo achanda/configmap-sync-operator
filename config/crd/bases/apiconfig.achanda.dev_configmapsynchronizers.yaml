@@ -59,6 +59,79 @@ spec:
                   apiEndpoint:
                     description: APIEndpoint is the URL of the external API endpoint
                     type: string
+                  auth:
+                    description: |-
+                      Auth defines the authentication configuration for the API
+                      If not specified, no authentication will be used
+                    properties:
+                      basic:
+                        description: |-
+                          Basic contains configuration for HTTP Basic Authentication
+                          Only used when Type is "basic"
+                        properties:
+                          passwordSecretRef:
+                            description: PasswordSecretRef is a reference to a secret
+                              containing the password
+                            properties:
+                              key:
+                                description: Key is the key in the secret containing
+                                  the data
+                                type: string
+                              name:
+                                description: Name is the name of the secret
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace is the namespace of the secret
+                                  If empty, the namespace of the ConfigMapSynchronizer is used
+                                type: string
+                            required:
+                            - key
+                            - name
+                            type: object
+                          username:
+                            description: Username is the username for basic authentication
+                            type: string
+                        required:
+                        - passwordSecretRef
+                        - username
+                        type: object
+                      bearer:
+                        description: |-
+                          Bearer contains configuration for Bearer Token Authentication
+                          Only used when Type is "bearer"
+                        properties:
+                          tokenSecretRef:
+                            description: TokenSecretRef is a reference to a secret
+                              containing the bearer token
+                            properties:
+                              key:
+                                description: Key is the key in the secret containing
+                                  the data
+                                type: string
+                              name:
+                                description: Name is the name of the secret
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace is the namespace of the secret
+                                  If empty, the namespace of the ConfigMapSynchronizer is used
+                                type: string
+                            required:
+                            - key
+                            - name
+                            type: object
+                        required:
+                        - tokenSecretRef
+                        type: object
+                      type:
+                        description: |-
+                          Type is the type of authentication to use
+                          Valid values are "basic" or "bearer"
+                        type: string
+                    required:
+                    - type
+                    type: object
                   headers:
                     additionalProperties:
                       type: string

@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -58,6 +60,43 @@ type ConfigMapSynchronizerReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
 
+// updateStatus updates the status of a ConfigMapSynchronizer with retry logic to handle conflicts
+func (r *ConfigMapSynchronizerReconciler) updateStatus(ctx context.Context, namespacedName types.NamespacedName, updateFn func(*apiconfigv1.ConfigMapSynchronizer)) error {
+	log := logf.FromContext(ctx)
+	var lastError error
+
+	// Retry up to 3 times
+	for i := 0; i < 3; i++ {
+		// Get the latest version of the resource
+		instance := &apiconfigv1.ConfigMapSynchronizer{}
+		if err := r.Get(ctx, namespacedName, instance); err != nil {
+			return err
+		}
+
+		// Apply the update function to modify the status
+		updateFn(instance)
+
+		// Try to update the status
+		if err := r.Status().Update(ctx, instance); err != nil {
+			if errors.IsConflict(err) {
+				// If there's a conflict, we'll retry
+				lastError = err
+				log.Info("Conflict detected when updating status, retrying", "attempt", i+1)
+				time.Sleep(time.Millisecond * 100) // Add a small delay before retrying
+				continue
+			}
+			// For other errors, return immediately
+			return err
+		}
+
+		// If we get here, the update was successful
+		return nil
+	}
+
+	// If we exhausted our retries, return the last error
+	return lastError
+}
+
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
@@ -90,11 +129,11 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 		log.Error(err, "Invalid polling interval format", "pollingInterval", instance.Spec.Source.PollingInterval)
 
 		// Update status to reflect the error
-		instance.Status.LastSyncState = "Error"
-		instance.Status.Message = fmt.Sprintf("Invalid polling interval format: %s", err)
-		err = r.Status().Update(ctx, instance)
-		if err != nil {
-			log.Error(err, "Failed to update ConfigMapSynchronizer status")
+		if updateErr := r.updateStatus(ctx, req.NamespacedName, func(instance *apiconfigv1.ConfigMapSynchronizer) {
+			instance.Status.LastSyncState = "Error"
+			instance.Status.Message = fmt.Sprintf("Invalid polling interval format: %s", err)
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update ConfigMapSynchronizer status")
 		}
 
 		return ctrl.Result{}, err
@@ -132,25 +171,25 @@ func (r *ConfigMapSynchronizerReconciler) Reconcile(ctx context.Context, req ctr
 			log.Error(err, "Failed to synchronize ConfigMap")
 
 			// Update status to reflect the error
-			instance.Status.LastSyncState = "Error"
-			instance.Status.Message = fmt.Sprintf("Synchronization failed: %s", err)
-			err = r.Status().Update(ctx, instance)
-			if err != nil {
-				log.Error(err, "Failed to update ConfigMapSynchronizer status")
+			if updateErr := r.updateStatus(ctx, req.NamespacedName, func(instance *apiconfigv1.ConfigMapSynchronizer) {
+				instance.Status.LastSyncState = "Error"
+				instance.Status.Message = fmt.Sprintf("Synchronization failed: %s", err)
+			}); updateErr != nil {
+				log.Error(updateErr, "Failed to update ConfigMapSynchronizer status")
 			}
 
 			return ctrl.Result{RequeueAfter: pollingInterval}, nil
 		}
 
 		// Update status to reflect successful synchronization
-		now := metav1.Now()
-		instance.Status.LastSyncTime = &now
-		instance.Status.LastSyncState = "Synced"
-		instance.Status.Message = fmt.Sprintf("Successfully synchronized ConfigMap from %s", instance.Spec.Source.APIEndpoint)
-		err = r.Status().Update(ctx, instance)
-		if err != nil {
-			log.Error(err, "Failed to update ConfigMapSynchronizer status")
-			return ctrl.Result{}, err
+		if updateErr := r.updateStatus(ctx, req.NamespacedName, func(instance *apiconfigv1.ConfigMapSynchronizer) {
+			now := metav1.Now()
+			instance.Status.LastSyncTime = &now
+			instance.Status.LastSyncState = "Synced"
+			instance.Status.Message = fmt.Sprintf("Successfully synchronized ConfigMap from %s", instance.Spec.Source.APIEndpoint)
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update ConfigMapSynchronizer status")
+			return ctrl.Result{}, updateErr
 		}
 	}
 
@@ -286,6 +325,13 @@ func (r *ConfigMapSynchronizerReconciler) fetchAPIData(ctx context.Context, inst
 		req.Header.Add(key, value)
 	}
 
+	// Apply authentication if configured
+	if instance.Spec.Source.Auth != nil {
+		if err := r.applyAuthentication(ctx, req, instance.Spec.Source.Auth, instance.Namespace); err != nil {
+			return nil, fmt.Errorf("failed to apply authentication: %w", err)
+		}
+	}
+
 	// Send the request
 	log.Info("Sending request to external API", "endpoint", instance.Spec.Source.APIEndpoint)
 	resp, err := client.Do(req)
@@ -369,8 +415,34 @@ func (r *ConfigMapSynchronizerReconciler) processTemplates(ctx context.Context, 
 
 	// Process each template in the ConfigMap
 	for templateKey, templateContent := range templateConfigMap.Data {
-		// Parse the template to check for required variables
-		tmpl, err := template.New(templateKey).Parse(templateContent)
+		// Create a new template with custom functions
+		tmpl := template.New(templateKey).Funcs(template.FuncMap{
+			// Add the default function which is commonly used in templates like Helm
+			"default": func(defaultValue interface{}, value interface{}) interface{} {
+				if value == nil {
+					return defaultValue
+				}
+				// Check for empty string
+				if s, ok := value.(string); ok && s == "" {
+					return defaultValue
+				}
+				// Check for zero values of other types
+				switch v := value.(type) {
+				case bool:
+					if !v {
+						return defaultValue
+					}
+				case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+					if reflect.ValueOf(v).IsZero() {
+						return defaultValue
+					}
+				}
+				return value
+			},
+		})
+
+		// Parse the template
+		tmpl, err := tmpl.Parse(templateContent)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse template %s: %w", templateKey, err)
 		}
@@ -553,6 +625,69 @@ func parseDeploymentRef(deploymentRef string, defaultNamespace string) (namespac
 		return parts[0], parts[1]
 	}
 	return defaultNamespace, deploymentRef
+}
+
+// getSecretValue retrieves a value from a secret using a SecretRef
+func (r *ConfigMapSynchronizerReconciler) getSecretValue(ctx context.Context, secretRef apiconfigv1.SecretRef, defaultNamespace string) (string, error) {
+	namespace := secretRef.Namespace
+	if namespace == "" {
+		namespace = defaultNamespace
+	}
+
+	// Get the secret
+	secret := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: secretRef.Name}, secret)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret %s/%s: %w", namespace, secretRef.Name, err)
+	}
+
+	// Get the value from the secret
+	value, ok := secret.Data[secretRef.Key]
+	if !ok {
+		return "", fmt.Errorf("key %s not found in secret %s/%s", secretRef.Key, namespace, secretRef.Name)
+	}
+
+	return string(value), nil
+}
+
+// applyAuthentication applies the specified authentication configuration to the HTTP request
+func (r *ConfigMapSynchronizerReconciler) applyAuthentication(ctx context.Context, req *http.Request, auth *apiconfigv1.AuthConfig, defaultNamespace string) error {
+	log := logf.FromContext(ctx)
+
+	switch auth.Type {
+	case "basic":
+		if auth.Basic == nil {
+			return fmt.Errorf("basic auth configuration is missing")
+		}
+
+		// Get password from secret
+		password, err := r.getSecretValue(ctx, auth.Basic.PasswordSecretRef, defaultNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to get password from secret: %w", err)
+		}
+
+		log.Info("Applying Basic Authentication")
+		req.SetBasicAuth(auth.Basic.Username, password)
+
+	case "bearer":
+		if auth.Bearer == nil {
+			return fmt.Errorf("bearer auth configuration is missing")
+		}
+
+		// Get token from secret
+		token, err := r.getSecretValue(ctx, auth.Bearer.TokenSecretRef, defaultNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to get token from secret: %w", err)
+		}
+
+		log.Info("Applying Bearer Token Authentication")
+		req.Header.Set("Authorization", "Bearer "+token)
+
+	default:
+		return fmt.Errorf("unsupported authentication type: %s", auth.Type)
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

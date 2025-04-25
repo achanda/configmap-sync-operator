@@ -1,0 +1,32 @@
+apiVersion: apiconfig.achanda.dev/v1
+kind: ConfigMapSynchronizer
+metadata:
+  labels:
+    app.kubernetes.io/name: configmapsynchronizer
+    app.kubernetes.io/managed-by: kustomize
+  name: no-auth-example
+  namespace: configmap-sync-test
+spec:
+  source:
+    apiEndpoint: "https://public-api.example.com/data"
+    method: "GET"
+    pollingInterval: "60s"
+    responseFormat: "json"
+    # No auth section for APIs that don't require authentication
+  target:
+    configMapName: "app-config-public"
+    namespace: "configmap-sync-test"
+    updateStrategy: "replace"
+    restartDeployments:
+      - "app-deployment"
+  template:
+    templateConfigMapRef:
+      name: "test-template"
+    valueMappings:
+      - jsonPath: "$.data.serverUrl"
+        variableName: "ServerUrl"
+      - jsonPath: "$.data.port"
+        variableName: "Port"
+        defaultValue: "8080"
+      - jsonPath: "$.data.environment"
+        variableName: "Environment"

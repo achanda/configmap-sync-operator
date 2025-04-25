@@ -54,6 +54,10 @@ type SourceConfig struct {
 	// ResponseFormat defines the format of the API response
 	// Currently only "json" is supported
 	ResponseFormat string `json:"responseFormat,omitempty"`
+
+	// Auth defines the authentication configuration for the API
+	// If not specified, no authentication will be used
+	Auth *AuthConfig `json:"auth,omitempty"`
 }
 
 // TargetConfig defines the target ConfigMap configuration
@@ -107,6 +111,49 @@ type ValueMapping struct {
 
 	// DefaultValue is an optional default value to use if the JSONPath doesn't match
 	DefaultValue string `json:"defaultValue,omitempty"`
+}
+
+// AuthConfig defines authentication configuration for the API
+type AuthConfig struct {
+	// Type is the type of authentication to use
+	// Valid values are "basic" or "bearer"
+	Type string `json:"type"`
+
+	// Basic contains configuration for HTTP Basic Authentication
+	// Only used when Type is "basic"
+	Basic *BasicAuthConfig `json:"basic,omitempty"`
+
+	// Bearer contains configuration for Bearer Token Authentication
+	// Only used when Type is "bearer"
+	Bearer *BearerAuthConfig `json:"bearer,omitempty"`
+}
+
+// BasicAuthConfig defines configuration for HTTP Basic Authentication
+type BasicAuthConfig struct {
+	// Username is the username for basic authentication
+	Username string `json:"username"`
+
+	// PasswordSecretRef is a reference to a secret containing the password
+	PasswordSecretRef SecretRef `json:"passwordSecretRef"`
+}
+
+// SecretRef defines a reference to a Kubernetes Secret
+type SecretRef struct {
+	// Name is the name of the secret
+	Name string `json:"name"`
+
+	// Namespace is the namespace of the secret
+	// If empty, the namespace of the ConfigMapSynchronizer is used
+	Namespace string `json:"namespace,omitempty"`
+
+	// Key is the key in the secret containing the data
+	Key string `json:"key"`
+}
+
+// BearerAuthConfig defines configuration for Bearer Token Authentication
+type BearerAuthConfig struct {
+	// TokenSecretRef is a reference to a secret containing the bearer token
+	TokenSecretRef SecretRef `json:"tokenSecretRef"`
 }
 
 // ConfigMapSynchronizerStatus defines the observed state of ConfigMapSynchronizer.

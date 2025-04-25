@@ -1,0 +1,41 @@
+apiVersion: apiconfig.achanda.dev/v1
+kind: ConfigMapSynchronizer
+metadata:
+  labels:
+    app.kubernetes.io/name: configmapsynchronizer
+    app.kubernetes.io/managed-by: kustomize
+  name: bearer-auth-example
+  namespace: configmap-sync-test
+spec:
+  source:
+    apiEndpoint: "https://api.example.com/secure-data"
+    method: "GET"
+    pollingInterval: "120s"
+    responseFormat: "json"
+    headers:
+      "Content-Type": "application/json"
+      "Accept": "application/json"
+    auth:
+      type: "bearer"
+      bearer:
+        tokenSecretRef:
+          name: "api-credentials"
+          key: "token"
+  target:
+    configMapName: "app-config-bearer"
+    namespace: "configmap-sync-test"
+    updateStrategy: "patch"
+    restartDeployments:
+      - "configmap-sync-test/api-client"
+      - "web-frontend"
+  template:
+    templateConfigMapRef:
+      name: "test-template"
+    valueMappings:
+      - jsonPath: "$.data.apiEndpoint"
+        variableName: "ApiEndpoint"
+      - jsonPath: "$.data.timeout"
+        variableName: "Timeout"
+        defaultValue: "30s"
+      - jsonPath: "$.data.features[*].enabled"
+        variableName: "EnabledFeatures"

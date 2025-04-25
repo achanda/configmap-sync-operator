@@ -1,10 +1,18 @@
 # ConfigMap Sync Operator
 
-A Kubernetes operator that synchronizes ConfigMaps with external API sources using customizable templates.
+A Kubernetes operator that synchronizes ConfigMaps with external API sources using customizable templates and secure authentication.
 
 ## Description
 
 The ConfigMap Sync Operator is designed to automate the process of keeping Kubernetes ConfigMaps in sync with external data sources. It periodically polls external APIs, transforms the data using Go templates, and updates target ConfigMaps accordingly. This is particularly useful for scenarios where configuration data is maintained outside the Kubernetes cluster but needs to be available to applications running within the cluster.
+
+### Key Features
+
+- **Secure Authentication**: Support for Basic and Bearer token authentication with secure secret references
+- **Flexible API Integration**: Configure HTTP method, headers, and polling intervals
+- **Powerful Data Transformation**: Extract and transform API data using JSONPath and Go templates
+- **Automatic Deployment Updates**: Trigger rolling restarts of deployments when ConfigMaps change
+- **Configurable Update Strategies**: Choose between patch or replace strategies for ConfigMap updates
 
 ## Getting Started
 
@@ -112,6 +120,82 @@ the '--force' flag and manually ensure that any custom configuration
 previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
 is manually re-applied afterwards.
 
+## Usage Guide
+
+### Authentication Configuration
+
+Authentication is completely optional. For APIs that don't require authentication, simply omit the `auth` section from your configuration.
+
+When authentication is needed, the operator supports two authentication methods for external APIs:
+
+#### Basic Authentication
+
+Use username and password authentication. The password is stored securely in a Kubernetes Secret.
+
+```yaml
+spec:
+  source:
+    apiEndpoint: "https://api.example.com/data"
+    auth:
+      type: "basic"
+      basic:
+        username: "apiuser"
+        passwordSecretRef:
+          name: "api-credentials"
+          namespace: "optional-namespace"
+          key: "password"
+```
+
+#### Bearer Token Authentication
+
+Use token-based authentication. The token is stored securely in a Kubernetes Secret.
+
+```yaml
+spec:
+  source:
+    apiEndpoint: "https://api.example.com/data"
+    auth:
+      type: "bearer"
+      bearer:
+        tokenSecretRef:
+          name: "api-credentials"
+          namespace: "optional-namespace"
+          key: "token"
+```
+
+### Template Configuration
+
+The operator uses Go templates to transform API data into ConfigMap content. Templates are stored in a template ConfigMap and referenced in the ConfigMapSynchronizer resource.
+
+```yaml
+spec:
+  template:
+    templateConfigMapRef:
+      name: "app-templates"
+      namespace: "optional-namespace"
+    valueMappings:
+      - jsonPath: "$.data.serverUrl"
+        variableName: "ServerUrl"
+      - jsonPath: "$.data.port"
+        variableName: "Port"
+        defaultValue: "8080"
+```
+
+### Deployment Restart Configuration
+
+You can configure the operator to automatically restart deployments when the target ConfigMap changes.
+
+```yaml
+spec:
+  target:
+    configMapName: "app-config"
+    namespace: "app-namespace"
+    updateStrategy: "replace"  # or "patch"
+    restartDeployments:
+      - "app-deployment"
+      - "other-namespace/another-deployment"
+```
+
 ## Contributing
 
 Contributions are welcome! Here's how you can contribute to this project:
@@ -123,6 +207,18 @@ Contributions are welcome! Here's how you can contribute to this project:
 5. Open a Pull Request
 
 Please make sure to update tests as appropriate and adhere to the existing coding style.
+
+### Running Tests
+
+The project includes comprehensive unit tests, including tests for the authentication functionality:
+
+```sh
+# Run all tests
+go test -v ./...
+
+# Run specific tests
+go test -v ./internal/controller -run "TestAuthentication"
+```
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
 

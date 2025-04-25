@@ -1,0 +1,38 @@
+apiVersion: apiconfig.achanda.dev/v1
+kind: ConfigMapSynchronizer
+metadata:
+  labels:
+    app.kubernetes.io/name: configmapsynchronizer
+    app.kubernetes.io/managed-by: kustomize
+  name: basic-auth-example
+  namespace: configmap-sync-test
+spec:
+  source:
+    apiEndpoint: "https://api.example.com/data"
+    method: "GET"
+    pollingInterval: "60s"
+    responseFormat: "json"
+    auth:
+      type: "basic"
+      basic:
+        username: "apiuser"
+        passwordSecretRef:
+          name: "api-credentials"
+          key: "password"
+  target:
+    configMapName: "app-config-basic"
+    namespace: "configmap-sync-test"
+    updateStrategy: "replace"
+    restartDeployments:
+      - "app-deployment"
+  template:
+    templateConfigMapRef:
+      name: "test-template"
+    valueMappings:
+      - jsonPath: "$.data.serverUrl"
+        variableName: "ServerUrl"
+      - jsonPath: "$.data.port"
+        variableName: "Port"
+        defaultValue: "8080"
+      - jsonPath: "$.data.environment"
+        variableName: "Environment"
