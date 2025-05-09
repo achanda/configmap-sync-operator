@@ -286,6 +286,54 @@ func (r *ConfigMapSynchronizerReconciler) fetchAPIData(ctx context.Context, inst
 		req.Header.Add(key, value)
 	}
 
+	// Apply authentication if configured
+	if instance.Spec.Source.Auth != nil {
+		switch instance.Spec.Source.Auth.Type {
+		case apiconfigv1.AuthTypeBasic:
+			if instance.Spec.Source.Auth.BasicAuth == nil {
+				return nil, fmt.Errorf("basicAuth configuration is required when auth type is 'basic'")
+			}
+
+			username := instance.Spec.Source.Auth.BasicAuth.Username
+			passwordSecretRef := instance.Spec.Source.Auth.BasicAuth.PasswordSecretRef
+
+			if passwordSecretRef == nil {
+				return nil, fmt.Errorf("passwordSecretRef is required for basic authentication")
+			}
+
+			// Get namespace for the secret, use instance namespace if not specified
+			secretNamespace := passwordSecretRef.Namespace
+			if secretNamespace == "" {
+				secretNamespace = instance.Namespace
+			}
+
+			// Fetch the secret containing the password
+			secret := &corev1.Secret{}
+			if err := r.Get(ctx, types.NamespacedName{
+				Namespace: secretNamespace,
+				Name:      passwordSecretRef.Name,
+			}, secret); err != nil {
+				return nil, fmt.Errorf("failed to get secret %s/%s for basic auth password: %w",
+					secretNamespace, passwordSecretRef.Name, err)
+			}
+
+			// Extract the password from the secret
+			passwordBytes, ok := secret.Data[passwordSecretRef.Key]
+			if !ok {
+				return nil, fmt.Errorf("key %s not found in secret %s/%s",
+					passwordSecretRef.Key, secretNamespace, passwordSecretRef.Name)
+			}
+
+			// Set basic auth header
+			log.Info("Using basic authentication for API request", "username", username,
+				"secretRef", fmt.Sprintf("%s/%s:%s", secretNamespace, passwordSecretRef.Name, passwordSecretRef.Key))
+			req.SetBasicAuth(username, string(passwordBytes))
+
+		default:
+			return nil, fmt.Errorf("unsupported authentication type: %s", instance.Spec.Source.Auth.Type)
+		}
+	}
+
 	// Send the request
 	log.Info("Sending request to external API", "endpoint", instance.Spec.Source.APIEndpoint)
 	resp, err := client.Do(req)

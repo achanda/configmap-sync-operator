@@ -47,6 +47,10 @@ type SourceConfig struct {
 	// Headers can reference secrets using ${SECRET_REF:namespace:name:key} format
 	Headers map[string]string `json:"headers,omitempty"`
 
+	// Auth contains authentication configuration for the API request
+	// Different authentication methods can be configured here
+	Auth *AuthConfig `json:"auth,omitempty"`
+
 	// PollingInterval is the interval at which to poll the API
 	// Format is a duration string (e.g. "60s", "5m")
 	PollingInterval string `json:"pollingInterval"`
@@ -107,6 +111,55 @@ type ValueMapping struct {
 
 	// DefaultValue is an optional default value to use if the JSONPath doesn't match
 	DefaultValue string `json:"defaultValue,omitempty"`
+}
+
+// AuthType defines the type of authentication to use
+// +kubebuilder:validation:Enum=basic
+type AuthType string
+
+const (
+	// AuthTypeBasic represents HTTP Basic Authentication
+	AuthTypeBasic AuthType = "basic"
+	// Add more authentication types here as needed
+	// AuthTypeOAuth AuthType = "oauth"
+	// AuthTypeAPIKey AuthType = "apiKey"
+)
+
+// AuthConfig defines authentication configuration for API requests
+type AuthConfig struct {
+	// Type specifies the authentication type
+	// +kubebuilder:validation:Required
+	Type AuthType `json:"type"`
+
+	// BasicAuth contains configuration for HTTP Basic Authentication
+	// Required when Type is "basic"
+	BasicAuth *BasicAuthConfig `json:"basicAuth,omitempty"`
+
+	// Additional auth types can be added here in the future
+	// OAuth *OAuthConfig `json:"oauth,omitempty"`
+	// APIKey *APIKeyConfig `json:"apiKey,omitempty"`
+}
+
+// BasicAuthConfig defines basic authentication configuration for API requests
+type BasicAuthConfig struct {
+	// Username is the username for basic authentication
+	Username string `json:"username"`
+
+	// PasswordSecretRef references a secret containing the password for basic authentication
+	PasswordSecretRef *SecretKeySelector `json:"passwordSecretRef"`
+}
+
+// SecretKeySelector selects a key from a Secret
+type SecretKeySelector struct {
+	// Name is the name of the secret
+	Name string `json:"name"`
+
+	// Namespace is the namespace of the secret
+	// If empty, the namespace of the ConfigMapSynchronizer is used
+	Namespace string `json:"namespace,omitempty"`
+
+	// Key is the key in the secret to select
+	Key string `json:"key"`
 }
 
 // ConfigMapSynchronizerStatus defines the observed state of ConfigMapSynchronizer.
