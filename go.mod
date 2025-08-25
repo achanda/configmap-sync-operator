@@ -6,7 +6,7 @@ godebug default=go1.23
 
 require (
 	github.com/PaesslerAG/jsonpath v0.1.1
-	github.com/onsi/ginkgo/v2 v2.25.0
+	github.com/onsi/ginkgo/v2 v2.25.1
 	github.com/onsi/gomega v1.38.0
 	github.com/stretchr/testify v1.10.0
 	k8s.io/api v0.32.4
